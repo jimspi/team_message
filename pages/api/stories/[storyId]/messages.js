@@ -1,12 +1,10 @@
 import { getDatabase } from '../../../../lib/db';
 import { v4 as uuidv4 } from 'uuid';
+import OpenAI from 'openai';
 
-// Remove OpenAI for now to avoid issues
-// import OpenAI from 'openai';
-
-// const openai = process.env.OPENAI_API_KEY ? new OpenAI({
-//   apiKey: process.env.OPENAI_API_KEY,
-// }) : null;
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+}) : null;
 
 export default async function handler(req, res) {
   // Add CORS headers
@@ -40,23 +38,73 @@ export default async function handler(req, res) {
     
     console.log('Message created:', message);
 
-    // Simple AI response (without OpenAI for now)
+    // AI response functionality
     if (content.includes('@ai')) {
-      const aiMessageId = uuidv4();
-      const aiResponse = "AI assistant is currently being set up. Your message has been noted!";
-      
-      const aiMessage = await db.createMessage(
-        aiMessageId,
-        storyId,
-        'AI Assistant',
-        aiResponse,
-        'now'
-      );
+      if (!openai) {
+        const aiMessageId = uuidv4();
+        const aiMessage = await db.createMessage(
+          aiMessageId,
+          storyId,
+          'AI Assistant',
+          'OpenAI API key not configured. Please add your OPENAI_API_KEY to Vercel environment variables.',
+          'now'
+        );
 
-      res.status(201).json({ 
-        userMessage: message,
-        aiMessage: aiMessage
-      });
+        return res.status(201).json({ 
+          userMessage: message,
+          aiMessage: aiMessage
+        });
+      }
+
+      try {
+        const aiQuery = content.replace('@ai', '').trim();
+        
+        const aiResponse = await openai.chat.completions.create({
+          model: "gpt-3.5-turbo",
+          messages: [
+            {
+              role: "system",
+              content: "You are a helpful assistant for news teams. Provide brief, relevant responses to help with news coverage, research, fact-checking, and story development. Keep responses concise and actionable."
+            },
+            {
+              role: "user",
+              content: aiQuery || "How can I help with your news coverage?"
+            }
+          ],
+          max_tokens: 200,
+          temperature: 0.7
+        });
+
+        const aiMessageId = uuidv4();
+        const aiMessage = await db.createMessage(
+          aiMessageId,
+          storyId,
+          'AI Assistant',
+          aiResponse.choices[0].message.content,
+          'now'
+        );
+
+        res.status(201).json({ 
+          userMessage: message,
+          aiMessage: aiMessage
+        });
+      } catch (aiError) {
+        console.error('OpenAI error:', aiError);
+        
+        const aiMessageId = uuidv4();
+        const aiMessage = await db.createMessage(
+          aiMessageId,
+          storyId,
+          'AI Assistant',
+          `AI service temporarily unavailable: ${aiError.message}`,
+          'now'
+        );
+
+        res.status(201).json({ 
+          userMessage: message,
+          aiMessage: aiMessage
+        });
+      }
     } else {
       res.status(201).json({ userMessage: message });
     }
