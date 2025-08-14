@@ -53,20 +53,81 @@ const NewsFlow = () => {
   };
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedStory) return;
-    
-    try {
-      const response = await fetch(`/api/stories/${selectedStory.id}/messages`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          author: 'You',
-          content: newMessage,
-          timePosted: 'now'
-        })
+  if (!newMessage.trim() || !selectedStory) return;
+  
+  try {
+    // Handle file uploads first if any files are selected
+    let attachments = [];
+    if (fileInputRef.current?.files && fileInputRef.current.files.length > 0) {
+      const formData = new FormData();
+      Array.from(fileInputRef.current.files).forEach(file => {
+        formData.append('files', file);
       });
+      
+      const uploadResponse = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (uploadResponse.ok) {
+        const uploadResult = await uploadResponse.json();
+        attachments = uploadResult.files || [];
+      }
+    }
+    
+    // Send message with attachment info
+    const response = await fetch(`/api/stories/${selectedStory.id}/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        author: 'You',
+        content: newMessage,
+        timePosted: 'now',
+        attachments: attachments
+      })
+    });
+    
+    const result = await response.json();
+    
+    // Update local state with new message(s)
+    setStories(prev => prev.map(story => {
+      if (story.id === selectedStory.id) {
+        const newMessages = [...story.newMessages];
+        
+        if (result.userMessage) {
+          // Add attachments to the user message
+          const userMessage = {
+            ...result.userMessage,
+            attachments: attachments.map(att => ({
+              original_name: att.originalName,
+              file_type: att.mimetype,
+              filename: att.filename,
+              url: att.url
+            }))
+          };
+          newMessages.push(userMessage);
+        }
+        
+        if (result.aiMessage) {
+          newMessages.push(result.aiMessage);
+        }
+        
+        return { ...story, newMessages };
+      }
+      return story;
+    }));
+    
+    setNewMessage("");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  } catch (error) {
+    console.error('Error sending message:', error);
+    alert(`Failed to send message: ${error.message}`);
+  }
+};
       
       const result = await response.json();
       
