@@ -53,41 +53,86 @@ const NewsFlow = () => {
   };
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedStory) return;
-    
-    try {
-      // Handle file uploads first if any files are selected
-      let attachments = [];
-      if (fileInputRef.current?.files && fileInputRef.current.files.length > 0) {
-        const formData = new FormData();
-        Array.from(fileInputRef.current.files).forEach(file => {
-          formData.append('files', file);
-        });
-        
-        const uploadResponse = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData
-        });
-        
-        if (uploadResponse.ok) {
-          const uploadResult = await uploadResponse.json();
-          attachments = uploadResult.files || [];
-        }
-      }
+  if (!newMessage.trim() || !selectedStory) return;
+  
+  try {
+    // Handle file uploads first if any files are selected
+    let attachments = [];
+    if (fileInputRef.current?.files && fileInputRef.current.files.length > 0) {
+      console.log('Files selected:', fileInputRef.current.files.length);
       
-      // Send message with attachment info
-      const response = await fetch(`/api/stories/${selectedStory.id}/messages`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          author: 'You',
-          content: newMessage,
-          timePosted: 'now',
-          attachments: attachments
-        })
+      const formData = new FormData();
+      Array.from(fileInputRef.current.files).forEach(file => {
+        console.log('Adding file:', file.name, file.type);
+        formData.append('files', file);
       });
+      
+      console.log('Uploading files...');
+      const uploadResponse = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+      
+      console.log('Upload response status:', uploadResponse.status);
+      
+      if (uploadResponse.ok) {
+        const uploadResult = await uploadResponse.json();
+        console.log('Upload result:', uploadResult);
+        attachments = uploadResult.files || [];
+        console.log('Processed attachments:', attachments);
+      } else {
+        const errorText = await uploadResponse.text();
+        console.error('Upload failed:', errorText);
+      }
+    }
+    
+    // Send message with attachment info
+    console.log('Sending message with attachments:', attachments);
+    const response = await fetch(`/api/stories/${selectedStory.id}/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        author: 'You',
+        content: newMessage,
+        timePosted: 'now',
+        attachments: attachments
+      })
+    });
+    
+    console.log('Message response status:', response.status);
+    const result = await response.json();
+    console.log('Message result:', result);
+    
+    // Update local state with new message(s)
+    setStories(prev => prev.map(story => {
+      if (story.id === selectedStory.id) {
+        const newMessages = [...story.newMessages];
+        
+        if (result.userMessage) {
+          // The message should already have attachments from the database
+          newMessages.push(result.userMessage);
+        }
+        
+        if (result.aiMessage) {
+          newMessages.push(result.aiMessage);
+        }
+        
+        return { ...story, newMessages };
+      }
+      return story;
+    }));
+    
+    setNewMessage("");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  } catch (error) {
+    console.error('Error sending message:', error);
+    alert(`Failed to send message: ${error.message}`);
+  }
+};
       
       const result = await response.json();
       
