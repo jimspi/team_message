@@ -53,81 +53,41 @@ const NewsFlow = () => {
   };
 
   const sendMessage = async () => {
-  if (!newMessage.trim() || !selectedStory) return;
-  
-  try {
-    // Handle file uploads first if any files are selected
-    let attachments = [];
-    if (fileInputRef.current?.files && fileInputRef.current.files.length > 0) {
-      const formData = new FormData();
-      Array.from(fileInputRef.current.files).forEach(file => {
-        formData.append('files', file);
-      });
+    if (!newMessage.trim() || !selectedStory) return;
+    
+    try {
+      // Handle file uploads first if any files are selected
+      let attachments = [];
+      if (fileInputRef.current?.files && fileInputRef.current.files.length > 0) {
+        const formData = new FormData();
+        Array.from(fileInputRef.current.files).forEach(file => {
+          formData.append('files', file);
+        });
+        
+        const uploadResponse = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (uploadResponse.ok) {
+          const uploadResult = await uploadResponse.json();
+          attachments = uploadResult.files || [];
+        }
+      }
       
-      const uploadResponse = await fetch('/api/upload', {
+      // Send message with attachment info
+      const response = await fetch(`/api/stories/${selectedStory.id}/messages`, {
         method: 'POST',
-        body: formData
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          author: 'You',
+          content: newMessage,
+          timePosted: 'now',
+          attachments: attachments
+        })
       });
-      
-      if (uploadResponse.ok) {
-        const uploadResult = await uploadResponse.json();
-        attachments = uploadResult.files || [];
-      }
-    }
-    
-    // Send message with attachment info
-    const response = await fetch(`/api/stories/${selectedStory.id}/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        author: 'You',
-        content: newMessage,
-        timePosted: 'now',
-        attachments: attachments
-      })
-    });
-    
-    const result = await response.json();
-    
-    // Update local state with new message(s)
-    setStories(prev => prev.map(story => {
-      if (story.id === selectedStory.id) {
-        const newMessages = [...story.newMessages];
-        
-        if (result.userMessage) {
-          // Add attachments to the user message
-          const userMessage = {
-            ...result.userMessage,
-            attachments: attachments.map(att => ({
-              original_name: att.originalName,
-              file_type: att.mimetype,
-              filename: att.filename,
-              url: att.url
-            }))
-          };
-          newMessages.push(userMessage);
-        }
-        
-        if (result.aiMessage) {
-          newMessages.push(result.aiMessage);
-        }
-        
-        return { ...story, newMessages };
-      }
-      return story;
-    }));
-    
-    setNewMessage("");
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  } catch (error) {
-    console.error('Error sending message:', error);
-    alert(`Failed to send message: ${error.message}`);
-  }
-};
       
       const result = await response.json();
       
@@ -137,7 +97,17 @@ const NewsFlow = () => {
           const newMessages = [...story.newMessages];
           
           if (result.userMessage) {
-            newMessages.push(result.userMessage);
+            // Add attachments to the user message
+            const userMessage = {
+              ...result.userMessage,
+              attachments: attachments.map(att => ({
+                original_name: att.originalName,
+                file_type: att.mimetype,
+                filename: att.filename,
+                url: att.url
+              }))
+            };
+            newMessages.push(userMessage);
           }
           
           if (result.aiMessage) {
@@ -150,8 +120,12 @@ const NewsFlow = () => {
       }));
       
       setNewMessage("");
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     } catch (error) {
       console.error('Error sending message:', error);
+      alert(`Failed to send message: ${error.message}`);
     }
   };
 
@@ -419,11 +393,46 @@ const NewsFlow = () => {
                       <p className="text-gray-700 mb-2">{message.content}</p>
                       
                       {message.attachments && message.attachments.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
+                        <div className="space-y-2">
                           {message.attachments.map((attachment, idx) => (
-                            <div key={idx} className="flex items-center bg-white px-2 py-1 rounded border text-sm">
-                              {getAttachmentIcon(attachment.file_type)}
-                              <span className="ml-1 text-gray-600">{attachment.original_name}</span>
+                            <div key={idx} className="bg-white rounded border p-2">
+                              {attachment.file_type?.includes('image') ? (
+                                <div>
+                                  <img 
+                                    src={attachment.url} 
+                                    alt={attachment.original_name}
+                                    className="max-w-xs max-h-48 rounded mb-2"
+                                  />
+                                  <div className="flex items-center text-sm text-gray-600">
+                                    <Image className="w-4 h-4 mr-1" />
+                                    {attachment.original_name}
+                                  </div>
+                                </div>
+                              ) : attachment.file_type?.includes('video') ? (
+                                <div>
+                                  <video 
+                                    src={attachment.url} 
+                                    controls
+                                    className="max-w-xs max-h-48 rounded mb-2"
+                                  />
+                                  <div className="flex items-center text-sm text-gray-600">
+                                    <Video className="w-4 h-4 mr-1" />
+                                    {attachment.original_name}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center text-sm text-gray-600">
+                                  <FileText className="w-4 h-4 mr-1" />
+                                  <a 
+                                    href={attachment.url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:underline"
+                                  >
+                                    {attachment.original_name}
+                                  </a>
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -462,11 +471,46 @@ const NewsFlow = () => {
                       <p className="text-gray-700 mb-2">{message.content}</p>
                       
                       {message.attachments && message.attachments.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
+                        <div className="space-y-2">
                           {message.attachments.map((attachment, idx) => (
-                            <div key={idx} className="flex items-center bg-gray-50 px-2 py-1 rounded border text-sm">
-                              {getAttachmentIcon(attachment.file_type)}
-                              <span className="ml-1 text-gray-600">{attachment.original_name}</span>
+                            <div key={idx} className="bg-gray-50 rounded border p-2">
+                              {attachment.file_type?.includes('image') ? (
+                                <div>
+                                  <img 
+                                    src={attachment.url} 
+                                    alt={attachment.original_name}
+                                    className="max-w-xs max-h-48 rounded mb-2"
+                                  />
+                                  <div className="flex items-center text-sm text-gray-600">
+                                    <Image className="w-4 h-4 mr-1" />
+                                    {attachment.original_name}
+                                  </div>
+                                </div>
+                              ) : attachment.file_type?.includes('video') ? (
+                                <div>
+                                  <video 
+                                    src={attachment.url} 
+                                    controls
+                                    className="max-w-xs max-h-48 rounded mb-2"
+                                  />
+                                  <div className="flex items-center text-sm text-gray-600">
+                                    <Video className="w-4 h-4 mr-1" />
+                                    {attachment.original_name}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center text-sm text-gray-600">
+                                  <FileText className="w-4 h-4 mr-1" />
+                                  <a 
+                                    href={attachment.url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:underline"
+                                  >
+                                    {attachment.original_name}
+                                  </a>
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
