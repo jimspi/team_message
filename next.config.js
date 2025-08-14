@@ -2,11 +2,6 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  api: {
-    bodyParser: {
-      sizeLimit: '50mb',
-    },
-  },
   experimental: {
     serverComponentsExternalPackages: ['sqlite3']
   }
