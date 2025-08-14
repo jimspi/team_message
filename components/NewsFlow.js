@@ -95,46 +95,33 @@ const NewsFlow = () => {
   };
 
   const createNewStory = async () => {
-  if (!newStoryTitle.trim()) return;
-  
-  try {
-    console.log('Creating new story...');
-    const participantsList = newStoryParticipants
-      .split(',')
-      .map(p => p.trim())
-      .filter(p => p.length > 0);
+    if (!newStoryTitle.trim()) return;
     
-    const response = await fetch('/api/stories', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        title: newStoryTitle,
-        participants: participantsList.length > 0 ? participantsList : ["You"]
-      })
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-    }
-    
-    const newStory = await response.json();
-    console.log('New story created:', newStory);
-    
-    setStories(prev => [newStory, ...prev]);
-    setSelectedStory(newStory);
-    setShowNewStoryModal(false);
-    setNewStoryTitle("");
-    setNewStoryParticipants("");
-  } catch (error) {
-    console.error('Error creating story:', error);
-    alert(`Failed to create story: ${error.message}`);
-  }
-};
+    try {
+      console.log('Creating new story...');
+      const participantsList = newStoryParticipants
+        .split(',')
+        .map(p => p.trim())
+        .filter(p => p.length > 0);
+      
+      const response = await fetch('/api/stories', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          title: newStoryTitle,
+          participants: participantsList.length > 0 ? participantsList : ["You"]
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
       
       const newStory = await response.json();
+      console.log('New story created:', newStory);
       
       setStories(prev => [newStory, ...prev]);
       setSelectedStory(newStory);
@@ -143,6 +130,7 @@ const NewsFlow = () => {
       setNewStoryParticipants("");
     } catch (error) {
       console.error('Error creating story:', error);
+      alert(`Failed to create story: ${error.message}`);
     }
   };
 
