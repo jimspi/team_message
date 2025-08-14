@@ -24,17 +24,21 @@ export default async function handler(req, res) {
 
   const db = getDatabase();
   const { storyId } = req.query;
-  const { author, content, timePosted } = req.body;
+  const { author, content, timePosted, attachments = [] } = req.body;
 
   try {
-    console.log('Creating message:', { storyId, author, content, timePosted });
+    console.log('Creating message:', { storyId, author, content, timePosted, attachments });
     
     if (!storyId || !author || !content) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
     const messageId = uuidv4();
-    const message = await db.createMessage(messageId, storyId, author, content, timePosted);
+    
+    // Use the method that handles attachments if we have them
+    const message = attachments.length > 0 
+      ? await db.createMessageWithAttachments(messageId, storyId, author, content, timePosted, attachments)
+      : await db.createMessage(messageId, storyId, author, content, timePosted);
     
     console.log('Message created:', message);
 
